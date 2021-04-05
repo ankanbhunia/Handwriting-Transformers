@@ -1,4 +1,4 @@
-# Handwriting Transformers **[arXiv](https://arxiv.org/abs/xxxxxxx)** 
+# Handwriting Transformers **[[arXiv]](https://arxiv.org/abs/xxxxxxx)** 
 
 [Ankan Kumar Bhunia](https://scholar.google.com/citations?user=2leAc3AAAAAJ&hl=en),
 [Salman Khan](https://scholar.google.com/citations?user=M59O9lkAAAAJ&hl=en),
