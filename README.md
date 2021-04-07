@@ -1,6 +1,6 @@
 # Handwriting Transformers **[[arXiv]](https://arxiv.org/abs/xxxxxxx)** 
 
-
+<img src="Figures/Results.gif" width="600" >
 [Ankan Kumar Bhunia](https://scholar.google.com/citations?user=2leAc3AAAAAJ&hl=en),
 [Salman Khan](https://scholar.google.com/citations?user=M59O9lkAAAAJ&hl=en),
 [Hisham Cholakkal](https://scholar.google.com/citations?user=bZ3YBRcAAAAJ&hl=en), 
@@ -14,8 +14,7 @@
 
 
 
-<p align="center"> <img src="Figures/Results.gif" width="600" align="center"> </p>
-
+<p align="center"> <img src="Figures/mainfigure.jpg" width="600" align="center"> </p>
 
 ## Code release coming soon!
 
