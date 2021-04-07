@@ -14,7 +14,7 @@
 
 
 
-<p align="center"> <img src="Figures/mainfigure.jpg" width="600" align="center"> </p>
+<p align="center"> <img src="Figures/Results.gif" width="600" align="center"> </p>
 
 
 ## Code release coming soon!
