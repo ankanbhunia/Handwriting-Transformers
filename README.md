@@ -15,7 +15,7 @@
 
 
 
-<><p align="center"> <img src="Figures/mainfigure.jpg" width="600" align="center"> </p>
+
 
 ## Code release coming soon!
 
