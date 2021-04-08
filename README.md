@@ -1,6 +1,8 @@
 # Handwriting Transformers **[[arXiv]](https://arxiv.org/abs/xxxxxxx)** 
 
 <img src="Figures/Results.gif" width="800">
+<p align="center"><a href="https://github.com/nastyox/Rando.js#nastyox"><img src="Figures/Results.gif" width="100%"/></a><a href="#nastyox"><img src="http://randojs.com/images/dropShadow.png" width="100%"/></a></p><br/>
+
 
 [Ankan Kumar Bhunia](https://scholar.google.com/citations?user=2leAc3AAAAAJ&hl=en),
 [Salman Khan](https://scholar.google.com/citations?user=M59O9lkAAAAJ&hl=en),
