@@ -1,4 +1,4 @@
-# :zap: Handwriting Transformers **[[arXiv]](https://arxiv.org/abs/xxxxxxx)** 
+# :zap: Handwriting Transformers **[[arXiv]](https://arxiv.org/abs/2104.03964)** 
 
 <img src="Figures/Results.gif" width="800"/>
 
