@@ -22,7 +22,7 @@
 
 ## Setup & Training
 
-Please see install.md for installing required libraries. You can change the content in the file mytext.txt to visualize generated handwriting while training.   
+Please see ```INSTALL.md``` for installing required libraries. You can change the content in the file ```mytext.txt``` to visualize generated handwriting while training.   
 
 ## Citation
 
