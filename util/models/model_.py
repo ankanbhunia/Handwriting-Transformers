@@ -9,7 +9,7 @@ import sys
 import torchvision.models as models
 from models.transformer import *
 from .BigGAN_networks import *
-from util.params import *
+from params import *
 from .OCR_network import *
 from models.blocks import LinearBlock, Conv2dBlock, ResBlocks, ActFirstResBlock
 from util.util import toggle_grad, loss_hinge_dis, loss_hinge_gen, ortho, default_ortho, toggle_grad, prepare_z_y, \
@@ -245,7 +245,7 @@ class Generator(nn.Module):
 
             h_list.append(h_)
 
-        if mode == 'test' or (not IS_CC and not IS_KLD):
+        if mode == 'test' or (not IS_CYCLE and not IS_KLD):
 
             return h
 
@@ -291,7 +291,7 @@ class Generator(nn.Module):
             OUT_IMGS.append(h)
 
 
-        if (not IS_CC) and IS_KLD:
+        if (not IS_CYCLE) and IS_KLD:
 
             OUT_Feats1 = torch.cat(OUT_Feats1, 1)[0]
 
@@ -737,15 +737,15 @@ class TRGAN(nn.Module):
             self.text_encode_fake_js.append(self.text_encode_fake_j)
 
         
-        if IS_CC and IS_KLD:
+        if IS_CYCLE and IS_KLD:
 
             self.fake, self.Lcycle1, self.Lcycle2, self.lda1, self.lda2, self.KLD = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
 
-        elif IS_CC and (not IS_KLD):
+        elif IS_CYCLE and (not IS_KLD):
 
             self.fake, self.Lcycle1, self.Lcycle2 = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
 
-        elif (not IS_CC) and IS_KLD:
+        elif (not IS_CYCLE) and IS_KLD:
 
             self.fake, self.lda1, self.KLD = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
 

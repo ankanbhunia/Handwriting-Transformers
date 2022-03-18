@@ -5,7 +5,7 @@ import random
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import sampler
-import lmdb
+#import lmdb
 import torchvision.transforms as transforms
 import six
 import sys
@@ -15,7 +15,8 @@ import os
 import sys
 import pickle
 import numpy as np
-from util.params import *
+from params import *
+
 
 def get_transform(grayscale=False, convert=True):
 
@@ -35,25 +36,33 @@ def get_transform(grayscale=False, convert=True):
 
 class TextDataset():
 
-    def __init__(self, target_transform=None):
+    def __init__(self, base_path = DATASET_PATHS,  num_examples = 15, target_transform=None):
+
+        self.NUM_EXAMPLES = num_examples
   
-        base_path = '../IAM_32.pickle'
+        #base_path = DATASET_PATHS
         file_to_store = open(base_path, "rb")
-        self.IMG_DATA = pickle.load(file_to_store)
-        self.author_id = list(self.IMG_DATA.keys())[:NUM_WRITERS]
+        self.IMG_DATA = pickle.load(file_to_store)['train']
+        self.IMG_DATA  = dict(list( self.IMG_DATA.items()))#[:NUM_WRITERS])
+        if 'None' in self.IMG_DATA.keys():
+            del self.IMG_DATA['None']
+        self.author_id = list(self.IMG_DATA.keys())
 
         self.transform = get_transform(grayscale=True)
         self.target_transform = target_transform
         
         self.collate_fn = TextCollator()
-    
+
 
     def __len__(self):
         return len(self.author_id)
 
     def __getitem__(self, index):
 
-        NUM_SAMPLES = 50
+        
+
+        NUM_SAMPLES = self.NUM_EXAMPLES
+
 
         author_id = self.author_id[index]
 
@@ -99,20 +108,16 @@ class TextDataset():
 
 class TextDatasetval():
 
-    def __init__(self, target_transform=None):
+    def __init__(self, base_path = DATASET_PATHS, num_examples = 15, target_transform=None):
         
-        self.IMG_DATA = {}
-
-        for data_ in DATASET:
-
-            base_path = DATASET_PATHS[data_]
-            file_to_store = open(base_path, "rb")
-            self.IMG_DATA =  {**self.IMG_DATA , **pickle.load(file_to_store)}
-        
-        del self.IMG_DATA['None']
-
-
-        self.author_id = list(self.IMG_DATA.keys())[NUM_WRITERS:]
+        self.NUM_EXAMPLES = num_examples
+        #base_path = DATASET_PATHS
+        file_to_store = open(base_path, "rb")
+        self.IMG_DATA = pickle.load(file_to_store)['test']
+        self.IMG_DATA  = dict(list( self.IMG_DATA.items()))#[NUM_WRITERS:])
+        if 'None' in self.IMG_DATA.keys():
+            del self.IMG_DATA['None']
+        self.author_id = list(self.IMG_DATA.keys())
 
         self.transform = get_transform(grayscale=True)
         self.target_transform = target_transform
@@ -125,7 +130,7 @@ class TextDatasetval():
 
     def __getitem__(self, index):
 
-        NUM_SAMPLES = 50
+        NUM_SAMPLES = self.NUM_EXAMPLES
 
         author_id = self.author_id[index]
 
@@ -165,6 +170,8 @@ class TextDatasetval():
 
 
         return item
+
+
 
 
 class TextCollator(object):

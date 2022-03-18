@@ -4,7 +4,7 @@ from torch.nn import init
 import os
 import torch
 from .networks import *
-from util.params import *
+from params import *
 
 class BidirectionalLSTM(nn.Module):
 

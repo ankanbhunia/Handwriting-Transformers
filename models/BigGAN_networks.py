@@ -16,7 +16,7 @@ from . import BigGAN_layers as layers
 from .sync_batchnorm import SynchronizedBatchNorm2d as SyncBatchNorm2d
 from util.util import to_device, load_network
 from .networks import init_weights
-from util.params import *
+from params import *
 # Attention is passed in in the format '32_64' to mean applying an attention
 # block at both resolution 32x32 and 64x64. Just '64' will apply at 64x64.
 

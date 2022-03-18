@@ -9,42 +9,63 @@ import sys
 import torchvision.models as models
 from models.transformer import *
 from .BigGAN_networks import *
-from util.params import *
+from params import *
 from .OCR_network import *
 from models.blocks import LinearBlock, Conv2dBlock, ResBlocks, ActFirstResBlock
 from util.util import toggle_grad, loss_hinge_dis, loss_hinge_gen, ortho, default_ortho, toggle_grad, prepare_z_y, \
     make_one_hot, to_device, multiple_replace, random_word
 from models.inception import InceptionV3, calculate_frechet_distance
+from data.dataset import TextDataset, TextDatasetval
 import cv2
 import time
 import matplotlib.pyplot as plt
+import shutil
 
 def get_rgb(x):
   R = 255 - int(int(x>0.5)*255*(x-0.5)/0.5)
   G = 0
   B = 255 + int(int(x<0.5)*255*(x-0.5)/0.5)
   return R, G, B
+  
 def get_page_from_words(word_lists, MAX_IMG_WIDTH = 800):
+
     line_all = []
     line_t = []
+
     width_t = 0
+
     for i in word_lists:
+
         width_t = width_t + i.shape[1] + 16
+
         if width_t>MAX_IMG_WIDTH:
+
             line_all.append(np.concatenate(line_t, 1))
+
             line_t = []
-            width_t = i.shape[1] + 16        
+
+            width_t = i.shape[1] + 16
+
+        
         line_t.append(i)
         line_t.append(np.ones((i.shape[0], 16)))
-    if len(line_all) == 0:       
+
+    if len(line_all) == 0:
+        
         line_all.append(np.concatenate(line_t, 1))
+
     max_lin_widths = MAX_IMG_WIDTH#max([i.shape[1] for i in line_all])
     gap_h = np.ones([16,max_lin_widths])
+
     page_= []
+
     for l in line_all:
+
         pad_ = np.ones([l.shape[0],max_lin_widths - l.shape[1]])
+
         page_.append(np.concatenate([l, pad_], 1))
         page_.append(gap_h)
+
     page = np.concatenate(page_, 0)
 
     return page*255
@@ -71,6 +92,7 @@ class FCNDecoder(nn.Module):
 
     def forward(self, x):
         y =  self.model(x)
+
         return y
 
 
@@ -88,33 +110,57 @@ class Generator(nn.Module):
                                                 TN_DROPOUT, "relu", True)
         encoder_norm = nn.LayerNorm(TN_HIDDEN_DIM) if True else None
         self.encoder = TransformerEncoder(encoder_layer, TN_ENC_LAYERS, encoder_norm)
+
         decoder_layer = TransformerDecoderLayer(TN_HIDDEN_DIM, TN_NHEADS, TN_DIM_FEEDFORWARD,
                                                 TN_DROPOUT, "relu", True)
         decoder_norm = nn.LayerNorm(TN_HIDDEN_DIM)
         self.decoder = TransformerDecoder(decoder_layer, TN_DEC_LAYERS, decoder_norm,
                                           return_intermediate=True)
+
         self.Feat_Encoder = nn.Sequential(*([nn.Conv2d(INP_CHANNEL, 64, kernel_size=7, stride=2, padding=3, bias=False)] +list(models.resnet18(pretrained=True).children())[1:-2]))
+        
         self.query_embed = nn.Embedding(VOCAB_SIZE, TN_HIDDEN_DIM)
-        self.linear_q = nn.Linear(TN_DIM_FEEDFORWARD*2, TN_DIM_FEEDFORWARD*8)
+
+
+        self.linear_q = nn.Linear(TN_DIM_FEEDFORWARD, TN_DIM_FEEDFORWARD*8)
+
         self.DEC = FCNDecoder(res_norm = 'in')
+
+
         self._muE = nn.Linear(512,512)
         self._logvarE = nn.Linear(512,512)         
+
         self._muD = nn.Linear(512,512)
         self._logvarD = nn.Linear(512,512)   
+
+
         self.l1loss = nn.L1Loss()
+
         self.noise = torch.distributions.Normal(loc=torch.tensor([0.]), scale=torch.tensor([1.0]))
+
+
+        
+
+
 
     def reparameterize(self, mu, logvar):
 
         mu = torch.unbind(mu , 1)
         logvar = torch.unbind(logvar , 1)
+
         outs = []
-        for m,l in zip(mu, logvar):     
+
+        for m,l in zip(mu, logvar):
+       
             sigma = torch.exp(l)
             eps = torch.cuda.FloatTensor(l.size()[0],1).normal_(0,1)
             eps  = eps.expand(sigma.size())
+
             out = m + sigma*eps
+
             outs.append(out)
+
+
         return torch.stack(outs, 1)
 
 
@@ -126,34 +172,53 @@ class Generator(nn.Module):
             FEAT_ST = FEAT_ST.view(B, 512, 1, -1)
         else:
             FEAT_ST = self.Feat_Encoder(ST)
+
+
         FEAT_ST_ENC = FEAT_ST.flatten(2).permute(2,0,1)
+
         memory = self.encoder(FEAT_ST_ENC)
+
         if IS_KLD:
+
             Ex = memory.permute(1,0,2)
+
             memory_mu = self._muE(Ex)
             memory_logvar = self._logvarE(Ex)
-            memory = self.reparameterize(memory_mu, memory_logvar).permute(1,0,2)        
+
+            memory = self.reparameterize(memory_mu, memory_logvar).permute(1,0,2)
+
+        
         OUT_IMGS = []
-        for i in range(QRS.shape[1]):           
+
+        for i in range(QRS.shape[1]):
+            
             QR = QRS[:, i, :]
+
             if ALL_CHARS:    
                 QR_EMB = self.query_embed.weight.repeat(batch_size,1,1).permute(1,0,2)
             else:
                 QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
 
-            tgt = torch.zeros_like(QR_EMB)            
+            tgt = torch.zeros_like(QR_EMB)
+            
             hs = self.decoder(tgt, memory, query_pos=QR_EMB)
+
             if IS_KLD:
+
                 Dx = hs[0].permute(1,0,2)
+
                 hs_mu = self._muD(Dx)
                 hs_logvar = self._logvarD(Dx)
+
                 hs = self.reparameterize(hs_mu, hs_logvar).permute(1,0,2).unsqueeze(0)
-                           
-            h = torch.cat([hs.transpose(1, 2)[-1], QR_EMB.permute(1,0,2)], -1)
+
+                            
+            h = hs.transpose(1, 2)[-1]#torch.cat([hs.transpose(1, 2)[-1], QR_EMB.permute(1,0,2)], -1)
             if ADD_NOISE: h = h + self.noise.sample(h.size()).squeeze(-1).to(DEVICE)
+
             h = self.linear_q(h)
             h = h.contiguous()
-            
+
             if ALL_CHARS: h = torch.stack([h[i][QR[i]] for i in range(batch_size)], 0)
 
             h = h.view(h.size(0), h.shape[1]*2, 4, -1)
@@ -177,8 +242,11 @@ class Generator(nn.Module):
 
         #Attention Visualization Init    
 
+
         enc_attn_weights, dec_attn_weights = [], []
-        self.hooks = [  
+
+        self.hooks = [
+         
             self.encoder.layers[-1].self_attn.register_forward_hook(
                 lambda self, input, output: enc_attn_weights.append(output[1])
             ),
@@ -186,62 +254,33 @@ class Generator(nn.Module):
                 lambda self, input, output: dec_attn_weights.append(output[1])
             ),
         ]
+        
+
         #Attention Visualization Init 
 
-        if IS_SEQ:
-            B, N, R, C = ST.shape
-            FEAT_ST = self.Feat_Encoder(ST.view(B*N, 1, R, C))
-            FEAT_ST = FEAT_ST.view(B, 512, 1, -1)
-        else:
-            FEAT_ST = self.Feat_Encoder(ST)
+        B, N, R, C = ST.shape
+        FEAT_ST = self.Feat_Encoder(ST.view(B*N, 1, R, C))
+        FEAT_ST = FEAT_ST.view(B, 512, 1, -1)
+
+
+
         FEAT_ST_ENC = FEAT_ST.flatten(2).permute(2,0,1)
+
         memory = self.encoder(FEAT_ST_ENC)
 
-        if IS_KLD:
-
-            Ex = memory.permute(1,0,2)
-
-            memory_mu = self._muE(Ex)
-            memory_logvar = self._logvarE(Ex)
-
-            memory = self.reparameterize(memory_mu, memory_logvar).permute(1,0,2)
-
-
-        if ALL_CHARS:    
-            QR_EMB = self.query_embed.weight.repeat(batch_size,1,1).permute(1,0,2)
-        else:
-            QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
+        QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
 
         tgt = torch.zeros_like(QR_EMB)
         
         hs = self.decoder(tgt, memory, query_pos=QR_EMB)
 
-        if IS_KLD:
-
-            Dx = hs[0].permute(1,0,2)
-
-            hs_mu = self._muD(Dx)
-            hs_logvar = self._logvarD(Dx)
-
-            hs = self.reparameterize(hs_mu, hs_logvar).permute(1,0,2).unsqueeze(0)
-
-            OUT_Feats1_mu = [hs_mu]
-            OUT_Feats1_logvar = [hs_logvar]
-
-
-        OUT_Feats1 = [hs]
-        
-                        
-        h = torch.cat([hs.transpose(1, 2)[-1], QR_EMB.permute(1,0,2)], -1)
-
-        
+                         
+        h = hs.transpose(1, 2)[-1]#torch.cat([hs.transpose(1, 2)[-1], QR_EMB.permute(1,0,2)], -1)
 
         if ADD_NOISE: h = h + self.noise.sample(h.size()).squeeze(-1).to(DEVICE)
 
         h = self.linear_q(h)
         h = h.contiguous()
-
-        if ALL_CHARS: h = torch.stack([h[i][QR[i]] for i in range(batch_size)], 0)
 
         h = h.view(h.size(0), h.shape[1]*2, 4, -1)
         h = h.permute(0, 3, 2, 1)
@@ -256,186 +295,8 @@ class Generator(nn.Module):
         for hook in self.hooks:
             hook.remove()
 
-        if mode == 'test' or (not IS_CC and not IS_KLD):
+        return h
 
-            return h
-
-
-        OUT_IMGS = [h]
-
-        for QR in QRs:
-
-            QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
-
-            tgt = torch.zeros_like(QR_EMB)
-            
-            hs = self.decoder(tgt, memory, query_pos=QR_EMB)
-
-
-            if IS_KLD:
-
-                Dx = hs[0].permute(1,0,2)
-
-                hs_mu = self._muD(Dx)
-                hs_logvar = self._logvarD(Dx)
-
-                hs = self.reparameterize(hs_mu, hs_logvar).permute(1,0,2).unsqueeze(0)
-
-                OUT_Feats1_mu.append(hs_mu)
-                OUT_Feats1_logvar.append(hs_logvar)
-
-
-            OUT_Feats1.append(hs)
-            
-                            
-            h = torch.cat([hs.transpose(1, 2)[-1], QR_EMB.permute(1,0,2)], -1)
-            if ADD_NOISE: h = h + self.noise.sample(h.size()).squeeze(-1).to(DEVICE)
-
-            h = self.linear_q(h)
-            h = h.contiguous()
-
-            h = h.view(h.size(0), h.shape[1]*2, 4, -1)
-            h = h.permute(0, 3, 2, 1)
-
-            h = self.DEC(h)
-
-            OUT_IMGS.append(h)
-
-
-        if (not IS_CC) and IS_KLD:
-
-            OUT_Feats1 = torch.cat(OUT_Feats1, 1)[0]
-
-            OUT_Feats1_mu = torch.cat(OUT_Feats1_mu, 1); OUT_Feats1_logvar = torch.cat(OUT_Feats1_logvar, 1); 
-            
-            
-            KLD = (0.5 * torch.mean(1 + memory_logvar - memory_mu.pow(2) - memory_logvar.exp())) \
-                    + (0.5 * torch.mean(1 + OUT_Feats1_logvar - OUT_Feats1_mu.pow(2) - OUT_Feats1_logvar.exp()))
-
-
-
-            def _get_lda(Ex_mu, Dx_mu, Ex_logvar, Dx_logvar):
-                return torch.sqrt(torch.sum((Ex_mu - Dx_mu) ** 2, dim=1) + \
-                                torch.sum((torch.sqrt(Ex_logvar.exp()) - torch.sqrt(Dx_logvar.exp())) ** 2, dim=1)).sum()
-
-            
-            lda1 = [_get_lda(memory_mu[:,idi,:], OUT_Feats1_mu[:,idj,:], memory_logvar[:,idi,:], OUT_Feats1_logvar[:,idj,:]) for idi in range(memory.shape[0]) for idj in range(OUT_Feats1.shape[0])]
-            
-
-            lda1 = torch.stack(lda1).mean()
-            
-
-        
-            return OUT_IMGS[0], lda1, KLD
-
-
-        with torch.no_grad():
-
-            if IS_SEQ:
-
-                FEAT_ST_T = torch.cat([self.Feat_Encoder(IM) for IM in OUT_IMGS], -1)
-
-            else:   
-
-                max_width_ = max([i_.shape[-1] for i_ in OUT_IMGS])
-
-                FEAT_ST_T = self.Feat_Encoder(torch.cat([torch.cat([i_, torch.ones((i_.shape[0], i_.shape[1],i_.shape[2], max_width_-i_.shape[3])).to(DEVICE)], -1) for i_ in OUT_IMGS], 1))
-
-            FEAT_ST_ENC_T = FEAT_ST_T.flatten(2).permute(2,0,1)
-
-            memory_T = self.encoder(FEAT_ST_ENC_T)
-
-            if IS_KLD:
-
-                Ex = memory_T.permute(1,0,2)
-
-                memory_T_mu = self._muE(Ex)
-                memory_T_logvar = self._logvarE(Ex)
-
-                memory_T = self.reparameterize(memory_T_mu, memory_T_logvar).permute(1,0,2)
-
-
-            QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
-
-            tgt = torch.zeros_like(QR_EMB)
-            
-            hs = self.decoder(tgt, memory_T, query_pos=QR_EMB)
-
-            if IS_KLD:
-
-                Dx = hs[0].permute(1,0,2)
-
-                hs_mu = self._muD(Dx)
-                hs_logvar = self._logvarD(Dx)
-
-                hs = self.reparameterize(hs_mu, hs_logvar).permute(1,0,2).unsqueeze(0)
-
-                OUT_Feats2_mu = [hs_mu]
-                OUT_Feats2_logvar = [hs_logvar]   
-
-
-            OUT_Feats2 = [hs]
-            
-
-
-            for QR in QRs:
-
-                QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
-
-                tgt = torch.zeros_like(QR_EMB)
-                
-                hs = self.decoder(tgt, memory_T, query_pos=QR_EMB)
-
-                if IS_KLD:
-
-                    Dx = hs[0].permute(1,0,2)
-
-                    hs_mu = self._muD(Dx)
-                    hs_logvar = self._logvarD(Dx)
-
-                    hs = self.reparameterize(hs_mu, hs_logvar).permute(1,0,2).unsqueeze(0)
-
-                    OUT_Feats2_mu.append(hs_mu)
-                    OUT_Feats2_logvar.append(hs_logvar)
-
-
-                OUT_Feats2.append(hs)
-                
-
-
-
-        Lcycle1 = np.sum([self.l1loss(memory[m_i], memory_T[m_j]) for m_i in range(memory.shape[0]) for m_j in range(memory_T.shape[0])])/(memory.shape[0]*memory_T.shape[0])
-        OUT_Feats1 = torch.cat(OUT_Feats1, 1)[0]; OUT_Feats2 = torch.cat(OUT_Feats2, 1)[0]
-
-        Lcycle2 = np.sum([self.l1loss(OUT_Feats1[f_i], OUT_Feats2[f_j]) for f_i in range(OUT_Feats1.shape[0]) for f_j in range(OUT_Feats2.shape[0])])/(OUT_Feats1.shape[0]*OUT_Feats2.shape[0])
-
-        if IS_KLD:
-        
-            OUT_Feats1_mu = torch.cat(OUT_Feats1_mu, 1); OUT_Feats1_logvar = torch.cat(OUT_Feats1_logvar, 1); 
-            OUT_Feats2_mu = torch.cat(OUT_Feats2_mu, 1); OUT_Feats2_logvar = torch.cat(OUT_Feats2_logvar, 1); 
-            
-            KLD = (0.25 * torch.mean(1 + memory_logvar - memory_mu.pow(2) - memory_logvar.exp())) \
-            + (0.25 * torch.mean(1 + memory_T_logvar - memory_T_mu.pow(2) - memory_T_logvar.exp()))\
-            + (0.25 * torch.mean(1 + OUT_Feats1_logvar - OUT_Feats1_mu.pow(2) - OUT_Feats1_logvar.exp()))\
-            + (0.25 * torch.mean(1 + OUT_Feats2_logvar - OUT_Feats2_mu.pow(2) - OUT_Feats2_logvar.exp()))
-
-
-            def _get_lda(Ex_mu, Dx_mu, Ex_logvar, Dx_logvar):
-                return torch.sqrt(torch.sum((Ex_mu - Dx_mu) ** 2, dim=1) + \
-                                torch.sum((torch.sqrt(Ex_logvar.exp()) - torch.sqrt(Dx_logvar.exp())) ** 2, dim=1)).sum()
-
-            
-            lda1 = [_get_lda(memory_mu[:,idi,:], OUT_Feats1_mu[:,idj,:], memory_logvar[:,idi,:], OUT_Feats1_logvar[:,idj,:]) for idi in range(memory.shape[0]) for idj in range(OUT_Feats1.shape[0])]
-            lda2 = [_get_lda(memory_T_mu[:,idi,:], OUT_Feats2_mu[:,idj,:], memory_T_logvar[:,idi,:], OUT_Feats2_logvar[:,idj,:]) for idi in range(memory_T.shape[0]) for idj in range(OUT_Feats2.shape[0])]
-
-            lda1 = torch.stack(lda1).mean()
-            lda2 = torch.stack(lda2).mean()
-
-
-            return OUT_IMGS[0], Lcycle1, Lcycle2, lda1, lda2, KLD
-
-
-        return OUT_IMGS[0], Lcycle1, Lcycle2    
 
 
 
@@ -443,6 +304,8 @@ class TRGAN(nn.Module):
 
     def __init__(self):
         super(TRGAN, self).__init__() 
+        
+
         self.epsilon = 1e-7
         self.netG = Generator().to(DEVICE)
         self.netD = nn.DataParallel(Discriminator()).to(DEVICE)
@@ -453,15 +316,21 @@ class TRGAN(nn.Module):
 
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
         self.inception = InceptionV3([block_idx]).to(DEVICE)
+
+      
         self.optimizer_G = torch.optim.Adam(self.netG.parameters(),
                                                 lr=G_LR, betas=(0.0, 0.999), weight_decay=0, eps=1e-8)
         self.optimizer_OCR = torch.optim.Adam(self.netOCR.parameters(),
                                                 lr=OCR_LR, betas=(0.0, 0.999), weight_decay=0,
                                                 eps=1e-8)
+
         self.optimizer_D = torch.optim.Adam(self.netD.parameters(),
                                                 lr=D_LR, betas=(0.0, 0.999), weight_decay=0, eps=1e-8)
+     
+
         self.optimizer_wl = torch.optim.Adam(self.netW.parameters(),
-                                                lr=W_LR, betas=(0.0, 0.999), weight_decay=0, eps=1e-8)           
+                                                lr=W_LR, betas=(0.0, 0.999), weight_decay=0, eps=1e-8)
+            
 
         self.optimizers = [self.optimizer_G, self.optimizer_OCR, self.optimizer_D, self.optimizer_wl]
 
@@ -486,7 +355,7 @@ class TRGAN(nn.Module):
         self.KLD = 0 
 
 
-        with open('../Lexicon/english_words.txt', 'rb') as f:
+        with open(ENGLISH_WORDS_PATH, 'rb') as f:
             self.lex = f.read().splitlines()
         lex=[]
         for word in self.lex:
@@ -501,179 +370,190 @@ class TRGAN(nn.Module):
 
         f = open('mytext.txt', 'r') 
 
-        self.text = [j.encode() for j in sum([i.split(' ') for i in f.readlines()], [])][:NUM_EXAMPLES]
+        self.text = [j.encode() for j in sum([i.split(' ') for i in f.readlines()], [])]#[:NUM_EXAMPLES]
         self.eval_text_encode, self.eval_len_text = self.netconverter.encode(self.text)
         self.eval_text_encode = self.eval_text_encode.to(DEVICE).repeat(batch_size, 1, 1)
 
+    def save_images_for_fid_calculation(self, dataloader, epoch, mode = 'train'):
 
-    def save_images_for_fid_calculation(self, ST, epoch, step):
-        
-        def normalize(tar):
-            tar = (tar - tar.min())/(tar.max()-tar.min())
-            tar = tar * 255
-            tar = tar.astype(np.uint8)
-            return tar
+        self.real_base = os.path.join('saved_images', EXP_NAME, 'Real')
+        self.fake_base = os.path.join('saved_images', EXP_NAME, 'Fake')
 
-        self.real_base = os.path.join('saved_images', EXP_NAME, 'Real', 'epoch - '+ str(epoch))
-        self.fake_base = os.path.join('saved_images', EXP_NAME, 'Fake', 'epoch - '+ str(epoch))
-        if not os.path.isdir(self.real_base): os.mkdir(self.real_base)
-        if not os.path.isdir(self.fake_base): os.mkdir(self.fake_base)
+        if os.path.isdir(self.real_base): shutil.rmtree(self.real_base)
+        if os.path.isdir(self.fake_base): shutil.rmtree(self.fake_base)
 
-        self.fakes = self.netG.Eval(ST, self.eval_text_encode) 
+        os.mkdir(self.real_base)
+        os.mkdir(self.fake_base)
 
-        fake_images = torch.cat(self.fakes, 1).detach().cpu().numpy()
-        real_images = ST.detach().cpu().numpy()
+        for step,data in enumerate(dataloader): 
 
-        for i in range(real_images.shape[0]):
-            for j in range(real_images.shape[1]):
-                cv2.imwrite(os.path.join(self.real_base, str(step*8 + i)+'_'+str(j)+'.png'), 255*(real_images[i,j])) 
-                cv2.imwrite(os.path.join(self.fake_base, str(step*8 + i)+'_'+str(j)+'.png'), 255*(fake_images[i,j])) 
+            ST = data['simg'].cuda()
+            self.fakes = self.netG.Eval(ST, self.eval_text_encode) 
+            fake_images = torch.cat(self.fakes, 1).detach().cpu().numpy()
 
-        
-        #REALs = ST.view(-1, ST.shape[2], ST.shape[3]).detach().cpu().numpy()
-        #FAKEs = torch.cat(self.fakes, 0).squeeze(1).detach().cpu().numpy()
+            for i in range(fake_images.shape[0]):
+                for j in range(fake_images.shape[1]):
+                    #cv2.imwrite(os.path.join(self.real_base, str(step*batch_size + i)+'_'+str(j)+'.png'), 255*(real_images[i,j])) 
+                    cv2.imwrite(os.path.join(self.fake_base, str(step*batch_size + i)+'_'+str(j)+'.png'), 255*(fake_images[i,j])) 
 
-        #[cv2.imwrite(os.path.join(self.real_base, str(step)+'_'+str(i)+'.png'), REALs[i]*255) for i in range(REALs.shape[0])]
-        #[cv2.imwrite(os.path.join(self.fake_base, str(step)+'_'+str(i)+'.png'), FAKEs[i]*255) for i in range(FAKEs.shape[0])]
 
+        if mode == 'train':
 
+            TextDatasetObj = TextDataset(num_examples = self.eval_text_encode.shape[1])
+            dataset_real = torch.utils.data.DataLoader(
+                        TextDatasetObj,
+                        batch_size=batch_size,
+                        shuffle=True,
+                        num_workers=0,
+                        pin_memory=True, drop_last=True,
+                        collate_fn=TextDatasetObj.collate_fn)
 
+        elif mode == 'test':
 
+            TextDatasetObjval = TextDatasetval(num_examples = self.eval_text_encode.shape[1])
+            dataset_real = torch.utils.data.DataLoader(
+                        TextDatasetObjval,
+                        batch_size=batch_size,
+                        shuffle=True,
+                        num_workers=0,
+                        pin_memory=True, drop_last=True,
+                        collate_fn=TextDatasetObjval.collate_fn)            
 
+        for step,data in enumerate(dataset_real): 
 
-     
-        
-        
+            real_images = data['simg'].numpy()
 
+            for i in range(real_images.shape[0]):
+                for j in range(real_images.shape[1]):
+                    cv2.imwrite(os.path.join(self.real_base, str(step*batch_size + i)+'_'+str(j)+'.png'), 255*(real_images[i,j])) 
 
 
+        return self.real_base, self.fake_base
 
-    def _generate_page(self, ST, SLEN):
+    def _generate_page(self, ST, SLEN, eval_text_encode = None, eval_len_text = None):
 
+        if eval_text_encode == None:
+            eval_text_encode = self.eval_text_encode
+        if eval_len_text == None:
+            eval_len_text = self.eval_len_text
 
-        self.fakes = self.netG.Eval(ST, self.eval_text_encode)
-        
 
-        word_t = []
-        word_l = []
+        self.fakes = self.netG.Eval(ST, eval_text_encode)
 
-        gap = np.ones([IMG_HEIGHT,16])
+        page1s = []
+        page2s = []
 
-        line_wids = []
+        for batch_idx in range(batch_size):
+       
+            word_t = []
+            word_l = []
 
+            gap = np.ones([IMG_HEIGHT,16])
 
-        for idx, fake_ in enumerate(self.fakes):
+            line_wids = []
 
-            word_t.append((fake_[0,0,:,:self.eval_len_text[idx]*resolution].cpu().numpy()+1)/2)
+            for idx, fake_ in enumerate(self.fakes):
 
-            word_t.append(gap)
+                word_t.append((fake_[batch_idx,0,:,:eval_len_text[idx]*resolution].cpu().numpy()+1)/2)
 
-            if len(word_t) == 16 or idx == len(self.fakes) - 1:
+                word_t.append(gap)
 
-                line_ = np.concatenate(word_t, -1)
+                if len(word_t) == 16 or idx == len(self.fakes) - 1:
 
-                word_l.append(line_)
-                line_wids.append(line_.shape[1])
+                    line_ = np.concatenate(word_t, -1)
 
-                word_t = []
+                    word_l.append(line_)
+                    line_wids.append(line_.shape[1])
 
+                    word_t = []
 
-        gap_h = np.ones([16,max(line_wids)])
 
-        page_= []
+            gap_h = np.ones([16,max(line_wids)])
 
-        for l in word_l:
+            page_= []
 
-            pad_ = np.ones([IMG_HEIGHT,max(line_wids) - l.shape[1]])
+            for l in word_l:
 
-            page_.append(np.concatenate([l, pad_], 1))
-            page_.append(gap_h)
+                pad_ = np.ones([IMG_HEIGHT,max(line_wids) - l.shape[1]])
 
+                page_.append(np.concatenate([l, pad_], 1))
+                page_.append(gap_h)
 
 
-        page1 = np.concatenate(page_, 0)
 
+            page1 = np.concatenate(page_, 0)
 
-        word_t = []
-        word_l = []
 
-        gap = np.ones([IMG_HEIGHT,16])
+            word_t = []
+            word_l = []
 
-        line_wids = []
+            gap = np.ones([IMG_HEIGHT,16])
 
-        sdata_ = [i.unsqueeze(1) for i in torch.unbind(ST, 1)]
+            line_wids = []
 
-        for idx, st in enumerate((sdata_)):
+            sdata_ = [i.unsqueeze(1) for i in torch.unbind(ST, 1)]
 
-            word_t.append((st[0,0,:,:int(SLEN.cpu().numpy()[0][idx])
-].cpu().numpy()+1)/2)
+            for idx, st in enumerate((sdata_)):
 
-            word_t.append(gap)
+                word_t.append((st[batch_idx,0,:,:int(SLEN.cpu().numpy()[batch_idx][idx])].cpu().numpy()+1)/2)
 
-            if len(word_t) == 16 or idx == len(self.fakes) - 1:
+                word_t.append(gap)
 
-                line_ = np.concatenate(word_t, -1)
+                if len(word_t) == 16 or idx == len(sdata_) - 1:
 
-                word_l.append(line_)
-                line_wids.append(line_.shape[1])
+                    line_ = np.concatenate(word_t, -1)
 
-                word_t = []
+                    word_l.append(line_)
+                    line_wids.append(line_.shape[1])
 
+                    word_t = []
 
-        gap_h = np.ones([16,max(line_wids)])
 
-        page_= []
+            gap_h = np.ones([16,max(line_wids)])
 
-        for l in word_l:
+            page_= []
 
-            pad_ = np.ones([IMG_HEIGHT,max(line_wids) - l.shape[1]])
+            for l in word_l:
 
-            page_.append(np.concatenate([l, pad_], 1))
-            page_.append(gap_h)
+                pad_ = np.ones([IMG_HEIGHT,max(line_wids) - l.shape[1]])
 
+                page_.append(np.concatenate([l, pad_], 1))
+                page_.append(gap_h)
 
 
-        page2 = np.concatenate(page_, 0)
 
-        merge_w_size =  max(page1.shape[0], page2.shape[0])
+            page2 = np.concatenate(page_, 0)
 
-        if page1.shape[0] != merge_w_size:
+            merge_w_size =  max(page1.shape[0], page2.shape[0])
 
-            page1 = np.concatenate([page1, np.ones([merge_w_size-page1.shape[0], page1.shape[1]])], 0)
+            if page1.shape[0] != merge_w_size:
 
-        if page2.shape[0] != merge_w_size:
+                page1 = np.concatenate([page1, np.ones([merge_w_size-page1.shape[0], page1.shape[1]])], 0)
 
-            page2 = np.concatenate([page2, np.ones([merge_w_size-page2.shape[0], page2.shape[1]])], 0)
+            if page2.shape[0] != merge_w_size:
 
+                page2 = np.concatenate([page2, np.ones([merge_w_size-page2.shape[0], page2.shape[1]])], 0)
 
-        page = np.concatenate([page2, page1], 1)
 
+            page1s.append(page1)
+            page2s.append(page2)
 
-        return page
 
+            #page = np.concatenate([page2, page1], 1)
 
+        page1s_ = np.concatenate(page1s,0)
+        max_wid = max([i.shape[1] for i in page2s])
+        padded_page2s = []
 
+        for para in page2s:
+            padded_page2s.append(np.concatenate([para, np.ones([ para.shape[0], max_wid-para.shape[1]])], 1))
 
+        padded_page2s_ =  np.concatenate(padded_page2s,0)
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-        #FEAT1 =  self.inception(torch.cat(self.fakes, 0).repeat(1,3,1,1))[0].detach().view(batch_size, len(self.fakes), -1).cpu().numpy()
-        #FEAT2 = self.inception(self.sdata.view(batch_size*NUM_EXAMPLES, 1, 32, -1).repeat(1,3,1,1))[0].detach().view(batch_size, NUM_EXAMPLES, -1 ).cpu().numpy()
-        #muvars1 = [{'mu':np.mean(FEAT1[i], axis=0), 'sigma' : np.cov(FEAT1[i], rowvar=False)} for i in range(FEAT1.shape[0])]
-        #muvars2 = [{'mu':np.mean(FEAT2[i], axis=0), 'sigma' : np.cov(FEAT2[i], rowvar=False)} for i in range(FEAT2.shape[0])]
-
+        return np.concatenate([padded_page2s_, page1s_], 1)
 
 
 
@@ -699,38 +579,7 @@ class TRGAN(nn.Module):
 
         return losses
 
-    def visualize_images(self):
 
-        imgs = {}
-
-
-        imgs['fake-1']=self.netG(self.sdata[0:1], self.text_encode_fake[0].unsqueeze(0), mode = 'test' )[0, 0].detach()
-        imgs['fake-2']=self.netG(self.sdata[0:1], self.text_encode_fake[1].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-        imgs['fake-3']=self.netG(self.sdata[0:1], self.text_encode_fake[2].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-
-        
-        imgs['res-1'] = torch.cat([self.sdata[0, 0],self.sdata[0, 1],self.sdata[0, 2], imgs['fake-1'], imgs['fake-2'], imgs['fake-3']], -1)
-
-
-        imgs['fake-1']=self.netG(self.sdata[1:2], self.text_encode_fake[0].unsqueeze(0), mode = 'test' )[0, 0].detach()
-        imgs['fake-2']=self.netG(self.sdata[1:2], self.text_encode_fake[1].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-        imgs['fake-3']=self.netG(self.sdata[1:2], self.text_encode_fake[2].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-
-        
-        imgs['res-2'] = torch.cat([self.sdata[1, 0],self.sdata[1, 1],self.sdata[1, 2], imgs['fake-1'], imgs['fake-2'], imgs['fake-3']], -1)
-
-
-        imgs['fake-1']=self.netG(self.sdata[2:3], self.text_encode_fake[0].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-        imgs['fake-2']=self.netG(self.sdata[2:3], self.text_encode_fake[1].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-        imgs['fake-3']=self.netG(self.sdata[2:3], self.text_encode_fake[2].unsqueeze(0) , mode = 'test' )[0, 0].detach()
-
-        
-        imgs['res-3'] = torch.cat([self.sdata[2, 0],self.sdata[2, 1],self.sdata[2, 2], imgs['fake-1'], imgs['fake-2'], imgs['fake-3']], -1)
-
-
-
-
-        return imgs
 
 
     def load_networks(self, epoch):
@@ -773,7 +622,6 @@ class TRGAN(nn.Module):
         self.text_encode_fake = self.text_encode_fake.to(DEVICE)
         self.one_hot_fake = make_one_hot(self.text_encode_fake, self.len_text_fake, VOCAB_SIZE).to(DEVICE)
 
-
         self.text_encode_fake_js = []
 
         for _ in range(NUM_WORDS - 1):
@@ -784,176 +632,7 @@ class TRGAN(nn.Module):
             self.text_encode_fake_js.append(self.text_encode_fake_j)
 
         
-        if IS_CC and IS_KLD:
-
-            self.fake, self.Lcycle1, self.Lcycle2, self.lda1, self.lda2, self.KLD = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
-
-        elif IS_CC and (not IS_KLD):
-
-            self.fake, self.Lcycle1, self.Lcycle2 = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
-
-        elif (not IS_CC) and IS_KLD:
-
-            self.fake, self.lda1, self.KLD = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
-
-        else:
-
-            self.fake = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
-
-
-
-    def visualize_attention(self):
-
-        def _norm_scores(arr):
-            return (arr - min(arr))/(max(arr) - min(arr))
-
-        simgs = self.sdata[0].detach().cpu().numpy()
-        fake = self.fake[0,0].detach().cpu().numpy()
-        slen = self.ST_LEN[0].detach().cpu().numpy()
-        selfatt = self.netG.enc_attn_weights[0].detach().cpu().numpy()
-        selfatt = np.stack([_norm_scores(i) for i in selfatt], 1)
-        fake_lab = self.words[0].decode()
-            
-        if ALL_CHARS:
-            decatt = torch.stack([self.netG.dec_attn_weights[i][self.text_encode_fake[i]] for i in range(batch_size)], 0)[0].detach().cpu().numpy()
-
-        else:
-            decatt = self.netG.dec_attn_weights[0].detach().cpu().numpy()
-
- 
-        decatt = np.stack([_norm_scores(i) for i in decatt], 0)
-
-        STdict = {}
-        FAKEdict = {}
-        count = 0
-
-        for sim_, sle_ in zip(simgs,slen):
-
-            for pi in range(sim_.shape[1]//sim_.shape[0]):
-
-                STdict[count] = {'patch':sim_[:, pi*32:(pi+1)*32], 'ischar': sle_>=pi*32, 'encoder_attention_score': selfatt[count], 'decoder_attention_score': decatt[:,count]}
-                count = count + 1
-
-        
-        for pi in range(fake.shape[1]//resolution):  
-
-            FAKEdict[pi] = {'patch': fake[:, pi*resolution:(pi+1)*resolution]}  
-
-        show_ims = []
-
-        for idx in range(len(fake_lab)):
-
-            viz_pats = []
-            viz_lin = []
-
-            for i in STdict.keys():
-
-                if STdict[i]['ischar']:
-
-                    X = cv2.cvtColor(STdict[i]['patch'],cv2.COLOR_GRAY2RGB)
-                    Y = (np.ones((STdict[i]['patch'].shape[0],STdict[i]['patch'].shape[1],3))*get_rgb(STdict[i]['decoder_attention_score'][idx]))/255
-
-                    Z = 0.5*X + 0.5*Y
-
-                    viz_pats.append(Z)
-
-                    if len(viz_pats) >= 20:
-
-                        viz_lin.append(np.concatenate(viz_pats, 1))
-
-                        viz_pats = []
-
-            
-
-
-            src = np.concatenate(viz_lin[:-2], 0)*255
-
-            viz_gts = []
-
-            for i in range(len(fake_lab)):
-
-                
-
-                #if i == idx:
-
-                    #bordersize = 5
-
-                    #FAKEdict[i]['patch'] = cv2.addWeighted(FAKEdict[i]['patch'] , 0.5, np.ones_like(FAKEdict[i]['patch'] ), 0.5, 0)
-
-
-
-        
-
-
-                img = np.zeros((54,16))
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                text = fake_lab[i]
-
-                # get boundary of this text
-                textsize = cv2.getTextSize(text, font, 1, 2)[0]
-
-                # get coords based on boundary
-                textX = (img.shape[1] - textsize[0]) // 2
-                textY = (img.shape[0] + textsize[1]) // 2
-
-                # add text centered on image
-                cv2.putText(img, text, (textX, textY ), font, 1, (255, 255, 255), 2)
-
-                img = (255 - img)/255
-
-                if i == idx:
-
-                    img = (1 - img)
-
-                viz_gts.append(img)
-
-            
-
-            tgt = np.concatenate([fake[:,:len(fake_lab)*16],np.concatenate(viz_gts, -1)], 0)
-            pad_ = np.ones((tgt.shape[0], (src.shape[1]-tgt.shape[1])//2))
-            tgt = np.concatenate([pad_, tgt, pad_], -1)*255
-            final = np.concatenate([src, np.stack([tgt, tgt, tgt], -1)], 0)
-
-
-            show_ims.append(final)
-
-
-        self_att_viz = []
-
-        for idx in np.random.choice(100, 10):
-
-            viz_pats = []
-            viz_lin = []
-
-            for i in STdict.keys():
-
-                if STdict[i]['ischar']:
-
-                    X = cv2.cvtColor(STdict[i]['patch'],cv2.COLOR_GRAY2RGB)
-                    Y = (np.ones((STdict[i]['patch'].shape[0],STdict[i]['patch'].shape[1],3))*get_rgb(STdict[i]['encoder_attention_score'][idx]))/255
-                    if i != idx:
-                        Z = 0.5*X + 0.5*Y
-
-                    else:
-                        Z = X
-
-                    viz_pats.append(Z)
-
-                    if len(viz_pats) >= 20:
-
-                        viz_lin.append(np.concatenate(viz_pats, 1))
-
-                        viz_pats = []
-
-            
-
-
-            src = np.concatenate(viz_lin[:-2], 0)*255
-            self_att_viz.append(src)
-
-
-
-        return show_ims, self_att_viz
+        self.fake = self.netG(self.sdata, self.text_encode_fake, self.text_encode_fake_js)
 
 
     def backward_D_OCR(self):
@@ -973,7 +652,6 @@ class TRGAN(nn.Module):
         self.loss_OCR_real = torch.mean(loss_OCR_real[~torch.isnan(loss_OCR_real)])
        
         loss_total = self.loss_D + self.loss_OCR_real
-
         # backward
         loss_total.backward()
         for param in self.netOCR.parameters():
@@ -1171,17 +849,6 @@ class TRGAN(nn.Module):
 
         self.loss_T = self.loss_G + self.loss_w_fake
 
-
-        
-
-        #grad_fake_WL = torch.autograd.grad(self.loss_w_fake, self.fake, retain_graph=True)[0]
-
-
-        #self.loss_grad_fake_WL = 10**6*torch.mean(grad_fake_WL**2)
-        #grad_fake_adv = torch.autograd.grad(self.loss_G, self.fake, retain_graph=True)[0]
-        #self.loss_grad_fake_adv = 10**6*torch.mean(grad_fake_adv**2)
-        
-       
 
         self.loss_T.backward(retain_graph=True)
 
@@ -1447,6 +1114,9 @@ class TRGAN(nn.Module):
         self.optimizer_G.step()
 
 
+
+
+
     def save_networks(self, epoch, save_dir):
         """Save all the networks to the disk.
 
@@ -1468,4 +1138,13 @@ class TRGAN(nn.Module):
                     net.cuda(self.gpu_ids[0])
                 else:
                     torch.save(net.cpu().state_dict(), save_path)
+
+
+
+
+
+
+
+
+
 
