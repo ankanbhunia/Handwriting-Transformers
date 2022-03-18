@@ -17,7 +17,7 @@ If you want to use ```wandb``` please install it and change your auth_key in the
 
 You can change different parameters in the ```params.py``` file.
 
-You can train the model in any custom dataset other than IAM and CVL. The process involves creating a ```dataset_name.pickle``` file and place it inside ```files``` folder. The structure of ```dataset_name.pickle``` is a simple python dictionary. 
+You can train the model in any custom dataset other than IAM and CVL. The process involves creating a ```dataset_name.pickle``` file and placing it inside ```files``` folder. The structure of ```dataset_name.pickle``` is a simple python dictionary. 
 
 ```python
 {
