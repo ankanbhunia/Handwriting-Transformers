@@ -13,15 +13,14 @@
 </p> 
 
  
- 
  <p align="center">
-<img src=Figures/mainfigure.jpg width="600"/>
+<img src=Figures/mainfigure.jpg width="500"/>
 </p>
 
-
+<!-- 
 <img src="Figures/Result.gif" width="800"/>
-
-
+ -->
+ 
 [Ankan Kumar Bhunia](https://scholar.google.com/citations?user=2leAc3AAAAAJ&hl=en),
 [Salman Khan](https://scholar.google.com/citations?user=M59O9lkAAAAJ&hl=en),
 [Hisham Cholakkal](https://scholar.google.com/citations?user=bZ3YBRcAAAAJ&hl=en), 
@@ -71,7 +70,9 @@ You can train the model in any custom dataset other than IAM and CVL. The proces
 'test': [{writer_3:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]}, {writer_4:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]},...], 
 }
 ```
+<img src="Figures/result.jpg" width="800"/>
 
+<img src="Figures/recons2.jpg" width="800"/>
 
 ## Citation
 
