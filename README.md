@@ -6,7 +6,7 @@
  
  
  <p align="center">
-<img src=Figures/mainfigure.jpg width="800"/>
+<img src=Figures/mainfigure.jpg width="600"/>
 </p>
 
 
