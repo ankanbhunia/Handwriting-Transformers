@@ -75,13 +75,13 @@ You can train the model in any custom dataset other than IAM and CVL. The proces
 
 
  <p align="center">
-<img src=Figures/result.jpg width="900"/>
+<img src=Figures/qualresult.jpg width="1000"/>
 </p>
 
- <p align="center">
+<!--  <p align="center">
 <img src=Figures/recons2.jpg width="900"/>
 </p>
-
+ -->
 <!-- 
 <img src="Figures/result.jpg" >
 
