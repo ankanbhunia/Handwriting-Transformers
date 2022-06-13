@@ -76,8 +76,14 @@ You can train the model in any custom dataset other than IAM and CVL. The proces
 Please check the ```results``` folder in the repository to see more qualitative analysis. Also, please check out colab demo to try with your own custom text and writing style [![Colab Notebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ankanbhunia/Handwriting-Transformers/blob/main/demo.ipynb)
 
  <p align="center">
+<img src=Figures/paperresult.jpg width="1000"/>
+</p>
+
+ <p align="center">
 <img src=Figures/qualresult.jpg width="1000"/>
 </p>
+
+
 
 ## Handwriting reconstruction results
  Reconstruction results using the proposed HWT in comparison to GANwriting and Davis et al. We use
