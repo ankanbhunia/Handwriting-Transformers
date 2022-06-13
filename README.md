@@ -70,12 +70,16 @@ You can train the model in any custom dataset other than IAM and CVL. The proces
 'test': [{writer_3:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]}, {writer_4:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]},...], 
 }
 ```
+
+## Handwriting synthesis results
+
+
  <p align="center">
 <img src=Figures/result.jpg width="900"/>
 </p>
 
  <p align="center">
-<img src=Figures/recons2 width="900"/>
+<img src=Figures/recons2.jpg width="900"/>
 </p>
 
 <!-- 
