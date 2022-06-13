@@ -70,10 +70,19 @@ You can train the model in any custom dataset other than IAM and CVL. The proces
 'test': [{writer_3:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]}, {writer_4:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]},...], 
 }
 ```
+ <p align="center">
+<img src=Figures/result.jpg width="900"/>
+</p>
+
+ <p align="center">
+<img src=Figures/recons2 width="900"/>
+</p>
+
+<!-- 
 <img src="Figures/result.jpg" >
 
 <img src="Figures/recons2.jpg" >
-
+ -->
 ## Citation
 
 If you use the code for your research, please cite our paper:
