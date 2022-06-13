@@ -80,6 +80,8 @@ Please check the ```results``` folder in the repository to see more qualitative 
 </p>
 
 ## Handwriting reconstruction results
+ Reconstruction results using the proposed HWT in comparison to GANwriting and Davis et al. We use
+the same text as in the style examples to generate handwritten images.
 
  <p align="center">
 <img src=Figures/recons2.jpg width="600"/>
