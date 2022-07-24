@@ -4,7 +4,7 @@
   -->
  <p align='center'>
   <b>
-    <a href="https://arxiv.org/abs/2112.10752">ArXiv</a>
+    <a href="https://arxiv.org/abs/2104.03964">ArXiv</a>
     | 
     <a href="https://openaccess.thecvf.com/content/ICCV2021/papers/Bhunia_Handwriting_Transformers_ICCV_2021_paper.pdf">Paper</a>
     | 
