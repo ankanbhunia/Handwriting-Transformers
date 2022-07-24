@@ -112,7 +112,7 @@
 
 
     <!-- abstract -->
-  <!--	<div class="container">
+  <<div class="container">
 		<div class="section">
 			<div class="col-12 text-center">
 
@@ -123,7 +123,7 @@
 				</div>
 
 				<blockquote style="font-size:20px">
-					<h4><b><em>Doodleformer imitates the way a human artist naturally draws sketches.</em></b></h4>
+					<h4><b><em>Our method can mimic handwriting style of someone from few sample images.</em></b></h4>
 				</blockquote>
 
      
@@ -131,26 +131,40 @@
 				
 				
 
-Generally, an artist first draws the holistic coarse structure of the sketch and then fills the fine-details to generate the final sketch. By first drawing the holistic coarse structure of the sketch aids to appropriately decide the location and the size of each sketch body part to be drawn. 
-</p>
+Formally, we are given (a) set of handwritten word images as few-shot calligraphic style examples of one writer, (b) query text from an unconstrained set of vocabulary, our model strives to generate handwritten images with the same text in the writing style of the given writer.</p>
 
-<p class="text-justify">
-We propose a novel two-stage encoder-decoder framework, DoodleFormer, for creative sketch generation. DoodleFormer decomposes the creative sketch generation problem into the construction of holistic coarse sketch composition followed by injecting fine- details to generate final sketch image.
-</p>
+
+
+	 <p align="center">
+	<img src="https://raw.githubusercontent.com/ankanbhunia/Handwriting-Transformers/main/Figures/Result.gif" width="700">
+	</p>
 
 <ol style="display: inline-block; text-align: left;">
-	<li>The first stage, PL-Net, takes the initial stroke points as the conditional input and learns to return the bounding boxes corresponding to each body part to be drawn;</li>
-	<li>The second stage, PS-Net, takes the predicted box locations as inputs and generates the final sketch image;</li>
+	<li>Our proposed HWT imitates the style of a writer for a given query content through self- and encoder-decoder attention that emphasizes relevant self attentive style features with respect to each character in that query.;</li>
+	<li>This enables us to (a) capture style-content entanglement at the character- level, and (b) model both the global as well as local style features for a given calligraphic style.;</li>
 </ol>
 
 			</div>
 		</div>
-	</div>-->
+	</div>
 
-	 <p align="center">
+	 <!-- <p align="center">
 	<img src="https://github.com/ankanbhunia/Handwriting-Transformers/raw/main/Figures/mainfigure.jpg" width="600">
-	</p>
-
+	</p> -->
+	
+	
+  <section>
+    <div class="container">
+      <div class="row">
+        <div class="col-12 text-center">
+            <hr style="margin-top:0px">
+            <video width="100%" playsinline="" preload="" controls>
+                <source src="src/video.mp4" type="video/mp4">
+            </video>
+        </div>
+      </div>
+    </div>
+  </section>
 
 
 	 <!-- 	 <p align="center">
