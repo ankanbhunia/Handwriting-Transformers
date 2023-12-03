@@ -1,7 +1,7 @@
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
-os.environ["WANDB_API_KEY"] = "00d63d49ce356cb935e4662538b8da23b47de626"
+#os.environ["WANDB_API_KEY"] = ""
 
 from pathlib import Path
 import time
