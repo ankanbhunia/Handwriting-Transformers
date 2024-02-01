@@ -17,6 +17,37 @@ import pickle
 import numpy as np
 from params import *
 
+def load_itw_samples(folder_path, num_samples = 15):
+
+  paths = glob.glob(f'{folder_path}/*')
+  paths = np.random.choice(paths, num_samples, replace = len(paths)<=num_samples)
+
+  imgs = [np.array(Image.open(i).convert('L')) for i in paths]
+  
+  imgs= [cv2.resize(imgs_i, (32*imgs_i.shape[1]//imgs_i.shape[0], 32)) for imgs_i in imgs]
+
+  max_width = 192 #[img.shape[1] for img in imgs] 
+
+  imgs_pad = []
+  imgs_wids = []
+
+  trans_fn = get_transform(grayscale=True)
+
+  for img in imgs:
+
+      img = 255 - img
+      img_height, img_width = img.shape[0], img.shape[1]
+      outImg = np.zeros(( img_height, max_width), dtype='float32')
+      outImg[:, :img_width] = img[:, :max_width]
+
+      img = 255 - outImg
+
+      imgs_pad.append(trans_fn((Image.fromarray(img))))
+      imgs_wids.append(img_width)
+
+  imgs_pad = torch.cat(imgs_pad, 0)
+
+  return imgs_pad.unsqueeze(0).cuda(), torch.Tensor(imgs_wids).unsqueeze(0).cuda()
 
 def get_transform(grayscale=False, convert=True):
 
