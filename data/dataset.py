@@ -16,17 +16,44 @@ import sys
 import pickle
 import numpy as np
 from params import *
+import glob, cv2
+import torchvision.transforms as transforms
+
+def crop_(input):
+    image = Image.fromarray(input)
+    image = image.convert('L')
+    binary_image = image.point(lambda x: 0 if x > 127 else 255, '1')
+    bbox = binary_image.getbbox()
+    cropped_image = image.crop(bbox)
+    return np.array(cropped_image)
+
+def get_transform(grayscale=False, convert=True):
+
+    transform_list = []
+    if grayscale:
+        transform_list.append(transforms.Grayscale(1))
+
+    if convert:
+        transform_list += [transforms.ToTensor()]
+        if grayscale:
+            transform_list += [transforms.Normalize((0.5,), (0.5,))]
+        else:
+            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+    return transforms.Compose(transform_list)
 
 def load_itw_samples(folder_path, num_samples = 15):
 
   paths = glob.glob(f'{folder_path}/*')
   paths = np.random.choice(paths, num_samples, replace = len(paths)<=num_samples)
 
-  imgs = [np.array(Image.open(i).convert('L')) for i in paths]
-  
-  imgs= [cv2.resize(imgs_i, (32*imgs_i.shape[1]//imgs_i.shape[0], 32)) for imgs_i in imgs]
+  words = [os.path.basename(path_i)[:-4] for path_i in paths]
 
-  max_width = 192 #[img.shape[1] for img in imgs] 
+  imgs = [np.array(Image.open(i).convert('L')) for i in paths]
+
+  imgs =  [crop_(im) for im in imgs]
+  imgs = [cv2.resize(imgs_i, (int(32*(imgs_i.shape[1]/imgs_i.shape[0])), 32)) for imgs_i in imgs]
+  max_width = 192
 
   imgs_pad = []
   imgs_wids = []
@@ -49,21 +76,6 @@ def load_itw_samples(folder_path, num_samples = 15):
 
   return imgs_pad.unsqueeze(0).cuda(), torch.Tensor(imgs_wids).unsqueeze(0).cuda()
 
-def get_transform(grayscale=False, convert=True):
-
-    transform_list = []
-    if grayscale:
-        transform_list.append(transforms.Grayscale(1))
-
-    if convert:
-        transform_list += [transforms.ToTensor()]
-        if grayscale:
-            transform_list += [transforms.Normalize((0.5,), (0.5,))]
-        else:
-            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-
-    return transforms.Compose(transform_list)
-
 
 class TextDataset():
 
@@ -73,8 +85,8 @@ class TextDataset():
   
         #base_path = DATASET_PATHS
         file_to_store = open(base_path, "rb")
-        self.IMG_DATA = pickle.load(file_to_store)['train']
-        self.IMG_DATA  = dict(list( self.IMG_DATA.items()))#[:NUM_WRITERS])
+        self.IMG_DATA = np.load(base_path, allow_pickle=True).item()['train']
+        self.IMG_DATA  = dict(list( self.IMG_DATA.items())) #[:NUM_WRITERS])
         if 'None' in self.IMG_DATA.keys():
             del self.IMG_DATA['None']
         self.author_id = list(self.IMG_DATA.keys())
@@ -103,7 +115,6 @@ class TextDataset():
         rand_id_real = np.random.choice(len(self.IMG_DATA_AUTHOR))
         real_img = self.transform(self.IMG_DATA_AUTHOR[rand_id_real]['img'].convert('L'))
         real_labels = self.IMG_DATA_AUTHOR[rand_id_real]['label'].encode()
-
 
         imgs = [np.array(self.IMG_DATA_AUTHOR[idx]['img'].convert('L')) for idx in random_idxs]
         labels = [self.IMG_DATA_AUTHOR[idx]['label'].encode() for idx in random_idxs]
@@ -144,7 +155,7 @@ class TextDatasetval():
         self.NUM_EXAMPLES = num_examples
         #base_path = DATASET_PATHS
         file_to_store = open(base_path, "rb")
-        self.IMG_DATA = pickle.load(file_to_store)['test']
+        self.IMG_DATA = np.load(base_path, allow_pickle=True).item()['test']#pickle.load(file_to_store)['test']
         self.IMG_DATA  = dict(list( self.IMG_DATA.items()))#[NUM_WRITERS:])
         if 'None' in self.IMG_DATA.keys():
             del self.IMG_DATA['None']
