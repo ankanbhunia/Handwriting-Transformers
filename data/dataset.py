@@ -85,7 +85,7 @@ class TextDataset():
   
         #base_path = DATASET_PATHS
         file_to_store = open(base_path, "rb")
-        self.IMG_DATA = np.load(base_path, allow_pickle=True).item()['train']
+        self.IMG_DATA = pickle.load(file_to_store)['train']
         self.IMG_DATA  = dict(list( self.IMG_DATA.items())) #[:NUM_WRITERS])
         if 'None' in self.IMG_DATA.keys():
             del self.IMG_DATA['None']
@@ -155,7 +155,7 @@ class TextDatasetval():
         self.NUM_EXAMPLES = num_examples
         #base_path = DATASET_PATHS
         file_to_store = open(base_path, "rb")
-        self.IMG_DATA = np.load(base_path, allow_pickle=True).item()['test']#pickle.load(file_to_store)['test']
+        self.IMG_DATA = pickle.load(file_to_store)['test']
         self.IMG_DATA  = dict(list( self.IMG_DATA.items()))#[NUM_WRITERS:])
         if 'None' in self.IMG_DATA.keys():
             del self.IMG_DATA['None']
