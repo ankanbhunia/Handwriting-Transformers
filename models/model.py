@@ -166,6 +166,8 @@ class Generator(nn.Module):
 
     def Eval(self, ST, QRS):
 
+        batch_size = ST.shape[0]
+
         if IS_SEQ:
             B, N, R, C = ST.shape
             FEAT_ST = self.Feat_Encoder(ST.view(B*N, 1, R, C))
@@ -195,7 +197,7 @@ class Generator(nn.Module):
             QR = QRS[:, i, :]
 
             if ALL_CHARS:    
-                QR_EMB = self.query_embed.weight.repeat(batch_size,1,1).permute(1,0,2)
+                QR_EMB = self.query_embed.weight.repeat(ST.shape[0],1,1).permute(1,0,2)
             else:
                 QR_EMB = self.query_embed.weight[QR].permute(1,0,2)
 
@@ -302,10 +304,10 @@ class Generator(nn.Module):
 
 class TRGAN(nn.Module):
 
-    def __init__(self):
+    def __init__(self, batch_size=batch_size):
         super(TRGAN, self).__init__() 
         
-
+        self.batch_size = batch_size
         self.epsilon = 1e-7
         self.netG = Generator().to(DEVICE)
         self.netD = nn.DataParallel(Discriminator()).to(DEVICE)
@@ -372,7 +374,7 @@ class TRGAN(nn.Module):
 
         self.text = [j.encode() for j in sum([i.split(' ') for i in f.readlines()], [])]#[:NUM_EXAMPLES]
         self.eval_text_encode, self.eval_len_text = self.netconverter.encode(self.text)
-        self.eval_text_encode = self.eval_text_encode.to(DEVICE).repeat(batch_size, 1, 1)
+        self.eval_text_encode = self.eval_text_encode.to(DEVICE).repeat(self.batch_size, 1, 1)
 
     def save_images_for_fid_calculation(self, dataloader, epoch, mode = 'train'):
 
@@ -394,7 +396,7 @@ class TRGAN(nn.Module):
             for i in range(fake_images.shape[0]):
                 for j in range(fake_images.shape[1]):
                     #cv2.imwrite(os.path.join(self.real_base, str(step*batch_size + i)+'_'+str(j)+'.png'), 255*(real_images[i,j])) 
-                    cv2.imwrite(os.path.join(self.fake_base, str(step*batch_size + i)+'_'+str(j)+'.png'), 255*(fake_images[i,j])) 
+                    cv2.imwrite(os.path.join(self.fake_base, str(step*self.batch_size + i)+'_'+str(j)+'.png'), 255*(fake_images[i,j])) 
 
 
         if mode == 'train':
@@ -402,7 +404,7 @@ class TRGAN(nn.Module):
             TextDatasetObj = TextDataset(num_examples = self.eval_text_encode.shape[1])
             dataset_real = torch.utils.data.DataLoader(
                         TextDatasetObj,
-                        batch_size=batch_size,
+                        batch_size=self.batch_size,
                         shuffle=True,
                         num_workers=0,
                         pin_memory=True, drop_last=True,
@@ -413,7 +415,7 @@ class TRGAN(nn.Module):
             TextDatasetObjval = TextDatasetval(num_examples = self.eval_text_encode.shape[1])
             dataset_real = torch.utils.data.DataLoader(
                         TextDatasetObjval,
-                        batch_size=batch_size,
+                        batch_size=self.batch_size,
                         shuffle=True,
                         num_workers=0,
                         pin_memory=True, drop_last=True,
@@ -425,7 +427,7 @@ class TRGAN(nn.Module):
 
             for i in range(real_images.shape[0]):
                 for j in range(real_images.shape[1]):
-                    cv2.imwrite(os.path.join(self.real_base, str(step*batch_size + i)+'_'+str(j)+'.png'), 255*(real_images[i,j])) 
+                    cv2.imwrite(os.path.join(self.real_base, str(step*self.batch_size + i)+'_'+str(j)+'.png'), 255*(real_images[i,j])) 
 
 
         return self.real_base, self.fake_base
@@ -443,7 +445,7 @@ class TRGAN(nn.Module):
         page1s = []
         page2s = []
 
-        for batch_idx in range(batch_size):
+        for batch_idx in range(self.batch_size):
        
             word_t = []
             word_l = []
@@ -617,7 +619,7 @@ class TRGAN(nn.Module):
         self.text_encode = self.text_encode.to(DEVICE).detach()
         self.len_text = self.len_text.detach()
 
-        self.words = [word.encode('utf-8') for word in np.random.choice(self.lex, batch_size)]
+        self.words = [word.encode('utf-8') for word in np.random.choice(self.lex, self.batch_size)]
         self.text_encode_fake, self.len_text_fake = self.netconverter.encode(self.words)
         self.text_encode_fake = self.text_encode_fake.to(DEVICE)
         self.one_hot_fake = make_one_hot(self.text_encode_fake, self.len_text_fake, VOCAB_SIZE).to(DEVICE)
@@ -626,7 +628,7 @@ class TRGAN(nn.Module):
 
         for _ in range(NUM_WORDS - 1):
 
-            self.words_j = [word.encode('utf-8') for word in np.random.choice(self.lex, batch_size)]
+            self.words_j = [word.encode('utf-8') for word in np.random.choice(self.lex, self.batch_size)]
             self.text_encode_fake_j, self.len_text_fake_j = self.netconverter.encode(self.words_j)
             self.text_encode_fake_j = self.text_encode_fake_j.to(DEVICE)
             self.text_encode_fake_js.append(self.text_encode_fake_j)
@@ -647,7 +649,7 @@ class TRGAN(nn.Module):
         self.loss_D = self.loss_Dreal + self.loss_Dfake
         
         self.pred_real_OCR = self.netOCR(self.real.detach())
-        preds_size = torch.IntTensor([self.pred_real_OCR.size(0)] * batch_size).detach()
+        preds_size = torch.IntTensor([self.pred_real_OCR.size(0)] * self.batch_size).detach()
         loss_OCR_real = self.OCR_criterion(self.pred_real_OCR, self.text_encode.detach(), preds_size, self.len_text.detach())
         self.loss_OCR_real = torch.mean(loss_OCR_real[~torch.isnan(loss_OCR_real)])
        
@@ -783,7 +785,7 @@ class TRGAN(nn.Module):
     
 
         pred_fake_OCR = self.netOCR(self.fake)
-        preds_size = torch.IntTensor([pred_fake_OCR.size(0)] * batch_size).detach()
+        preds_size = torch.IntTensor([pred_fake_OCR.size(0)] * self.batch_size).detach()
         loss_OCR_fake = self.OCR_criterion(pred_fake_OCR, self.text_encode_fake.detach(), preds_size, self.len_text_fake.detach())
         self.loss_OCR_fake = torch.mean(loss_OCR_fake[~torch.isnan(loss_OCR_fake)])
         
@@ -1138,13 +1140,3 @@ class TRGAN(nn.Module):
                     net.cuda(self.gpu_ids[0])
                 else:
                     torch.save(net.cpu().state_dict(), save_path)
-
-
-
-
-
-
-
-
-
-
