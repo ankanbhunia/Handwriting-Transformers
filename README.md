@@ -12,7 +12,7 @@
     | 
     <a href="https://openaccess.thecvf.com/content/ICCV2021/papers/Bhunia_Handwriting_Transformers_ICCV_2021_paper.pdf">Paper</a>
     | 
-    <a href="https://huggingface.co/spaces/ankankbhunia/HWT">Huggingface-demo</a>
+    <a href="https://ankankbhunia-hwt.hf.space/">Huggingface-demo</a>
     | 
     <a href="https://colab.research.google.com/github/ankanbhunia/Handwriting-Transformers/blob/main/demo.ipynb">Colab-demo</a>
   </b>
