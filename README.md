@@ -122,6 +122,12 @@ the same text as in the style examples to generate handwritten images.
 
 <img src="Figures/recons2.jpg" >
  -->
+
+ ## Run Demo using Docker
+```
+ docker run -it -p 7860:7860 --platform=linux/amd64 \
+	registry.hf.space/ankankbhunia-hwt:latest python app.py
+ ```
 ## Citation
 
 If you use the code for your research, please cite our paper:
