@@ -94,6 +94,11 @@ You can train the model in any custom dataset other than IAM and CVL. The proces
 'test': [{writer_3:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]}, {writer_4:[{'img': <PIL.IMAGE>, 'label':<str_label>},...]},...], 
 }
 ```
+ ## Run Demo using Docker
+```
+ docker run -it -p 7860:7860 --platform=linux/amd64 \
+	registry.hf.space/ankankbhunia-hwt:latest python app.py
+ ```
 
 ## Handwriting synthesis results
 
@@ -123,11 +128,7 @@ the same text as in the style examples to generate handwritten images.
 <img src="Figures/recons2.jpg" >
  -->
 
- ## Run Demo using Docker
-```
- docker run -it -p 7860:7860 --platform=linux/amd64 \
-	registry.hf.space/ankankbhunia-hwt:latest python app.py
- ```
+
 ## Citation
 
 If you use the code for your research, please cite our paper:
